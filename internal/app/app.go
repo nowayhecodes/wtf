@@ -7,27 +7,43 @@ import (
 	"strings"
 
 	"github.com/nowayhecodes/wtf/internal/config"
-	"github.com/nowayhecodes/wtf/internal/correction"
-	"github.com/nowayhecodes/wtf/internal/history"
-	"github.com/nowayhecodes/wtf/internal/shell"
 )
 
-type App struct {
-	cfg        *config.Config
-	detector   *correction.Detector
-	executor   *shell.Executor
-	histParser *history.Parser
+// HistoryParser interface for command history operations
+type HistoryParser interface {
+	GetLastCommand() (string, error)
 }
 
-func New(cfg *config.Config) *App {
+// ErrorDetector interface for error detection and suggestion
+type ErrorDetector interface {
+	HasError(cmd string) bool
+	Suggest(cmd string) string
+}
+
+// CommandExecutor interface for command execution
+type CommandExecutor interface {
+	Execute(cmd string) error
+}
+
+// App represents the main application
+type App struct {
+	cfg        *config.Config
+	histParser HistoryParser
+	detector   ErrorDetector
+	executor   CommandExecutor
+}
+
+// New creates a new App instance
+func New(cfg *config.Config, histParser HistoryParser, detector ErrorDetector, executor CommandExecutor) *App {
 	return &App{
 		cfg:        cfg,
-		detector:   correction.NewDetector(cfg),
-		executor:   shell.NewExecutor(),
-		histParser: history.NewParser(),
+		histParser: histParser,
+		detector:   detector,
+		executor:   executor,
 	}
 }
 
+// Run executes the main application logic
 func (a *App) Run() error {
 	// Get last command from history
 	lastCmd, err := a.histParser.GetLastCommand()

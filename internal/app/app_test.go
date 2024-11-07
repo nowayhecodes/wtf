@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Mock implementations
 type mockHistoryParser struct {
 	lastCmd string
 	err     error
@@ -86,13 +87,13 @@ func TestApp_Run(t *testing.T) {
 			detector := &mockDetector{hasError: tt.hasError, suggest: tt.suggestion}
 			executor := &mockExecutor{}
 
-			// Create app with mocks
-			app := &App{
-				cfg:        &config.Config{},
-				histParser: histParser,
-				detector:   detector,
-				executor:   executor,
-			}
+			// Create app with mocks using the New function
+			app := New(
+				&config.Config{},
+				histParser,
+				detector,
+				executor,
+			)
 
 			// Mock stdin if input is provided
 			if tt.input != "" {
