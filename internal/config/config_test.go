@@ -26,6 +26,10 @@ func TestLoad(t *testing.T) {
 	err := os.WriteFile(configPath, []byte(configData), 0644)
 	require.NoError(t, err)
 
+	invalidJSONPath := filepath.Join(tmpDir, "invalid.json")
+	err = os.WriteFile(invalidJSONPath, []byte(`{invalid json`), 0644)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name        string
 		configPath  string
@@ -59,9 +63,9 @@ func TestLoad(t *testing.T) {
 		},
 		{
 			name:        "invalid json",
-			configPath:  filepath.Join(tmpDir, "invalid.json"),
+			configPath:  invalidJSONPath,
 			wantErr:     true,
-			errContains: "no such file",
+			errContains: "invalid character",
 		},
 	}
 

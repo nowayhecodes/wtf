@@ -30,6 +30,17 @@ func TestExecutor_Execute(t *testing.T) {
 			},
 		},
 		{
+			name: "remove command",
+			cmd:  "rm " + testFile,
+			verify: func() error {
+				_, err := os.Stat(testFile)
+				if err == nil {
+					return os.ErrInvalid
+				}
+				return nil
+			},
+		},
+		{
 			name:    "invalid command",
 			cmd:     "invalidcommand",
 			wantErr: true,
@@ -37,20 +48,6 @@ func TestExecutor_Execute(t *testing.T) {
 		{
 			name: "empty command",
 			cmd:  "",
-		},
-		{
-			name: "command with arguments",
-			cmd:  "echo 'test' > " + testFile,
-			verify: func() error {
-				data, err := os.ReadFile(testFile)
-				if err != nil {
-					return err
-				}
-				if string(data) != "test\n" {
-					return os.ErrInvalid
-				}
-				return nil
-			},
 		},
 	}
 
