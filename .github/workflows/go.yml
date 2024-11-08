@@ -22,7 +22,7 @@ jobs:
       id: tag
       run: |
         if [[ "${{ github.event_name }}" != "push" ]]; then
-          tag=v$(date +%d.%M.%S)
+          tag=v$(date +%d.%M)
         else
           tag=$(basename "${{ github.ref }}")
         fi
