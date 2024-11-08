@@ -10,38 +10,70 @@ import (
 )
 
 type Detector struct {
-	cfg *config.Config
+	cfg         *config.Config
+	commonCmds  map[string]struct{} // Common commands cache
+	initialized bool
 }
 
 func NewDetector(cfg *config.Config) *Detector {
-	return &Detector{cfg: cfg}
+	return &Detector{
+		cfg:        cfg,
+		commonCmds: make(map[string]struct{}),
+	}
+}
+
+// initializeCommonCommands builds a cache of common commands
+func (d *Detector) initializeCommonCommands() {
+	if d.initialized {
+		return
+	}
+
+	// Pre-populate with very common commands
+	commonCommands := []string{
+		"git", "ls", "cd", "pwd", "grep", "find", "docker", "kubectl",
+		"vim", "nano", "cat", "echo", "mkdir", "rm", "cp", "mv",
+	}
+
+	for _, cmd := range commonCommands {
+		d.commonCmds[cmd] = struct{}{}
+	}
+
+	// Add commands from PATH
+	pathDirs := filepath.SplitList(os.Getenv("PATH"))
+	for _, dir := range pathDirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			d.commonCmds[entry.Name()] = struct{}{}
+		}
+	}
+
+	d.initialized = true
 }
 
 func (d *Detector) HasError(cmd string) bool {
-	// Check if command exists in PATH
+	if cmd == "" {
+		return false
+	}
+
 	cmdParts := strings.Fields(cmd)
 	if len(cmdParts) == 0 {
 		return false
 	}
 
 	_, err := exec.LookPath(cmdParts[0])
-	if err == nil {
-		return false
-	}
-
-	// Check if it's a file path error
-	if strings.Contains(cmd, "/") {
-		_, err := os.Stat(cmd)
-		if err == nil {
-			return false
-		}
-	}
-
-	return true
+	return err != nil
 }
 
 func (d *Detector) Suggest(cmd string) string {
-	// Check custom rules first
+	d.initializeCommonCommands()
+
+	// Check custom rules first (they take priority)
 	if suggestion, ok := d.cfg.CustomRules[cmd]; ok {
 		return suggestion
 	}
@@ -51,85 +83,36 @@ func (d *Detector) Suggest(cmd string) string {
 		return ""
 	}
 
-	// Try to find similar commands in PATH
-	suggestion := d.findSimilarCommand(cmdParts[0])
-	if suggestion != "" {
-		return suggestion + strings.Join(cmdParts[1:], " ")
-	}
-
-	// Try to find similar file paths
-	if strings.Contains(cmd, "/") {
-		suggestion = d.findSimilarPath(cmd)
-		if suggestion != "" {
-			return suggestion
-		}
-	}
-
-	return ""
-}
-
-func (d *Detector) findSimilarCommand(cmd string) string {
-	// Get all directories in PATH
-	pathEnv := os.Getenv("PATH")
-	paths := strings.Split(pathEnv, string(os.PathListSeparator))
-
-	bestMatch := ""
-	minDist := d.cfg.LevenThreshold + 1
-
-	// Search through each directory in PATH
-	for _, path := range paths {
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			continue
-		}
-
-		// Compare each executable with the input command
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-
-			// Check if file is executable
-			info, err := entry.Info()
-			if err != nil {
-				continue
-			}
-			if info.Mode()&0111 == 0 { // Check if executable bit is set
-				continue
-			}
-
-			dist := levenshteinDistance(cmd, entry.Name())
-			if dist < minDist {
-				minDist = dist
-				bestMatch = entry.Name()
-			}
-		}
-	}
-
-	if minDist <= d.cfg.LevenThreshold {
-		return bestMatch
-	}
-
-	return ""
-}
-
-func (d *Detector) findSimilarPath(path string) string {
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
+	wrongCmd := cmdParts[0]
+	bestMatch := d.findBestMatch(wrongCmd)
+	if bestMatch == "" {
 		return ""
 	}
 
+	// Replace the wrong command with the suggestion
+	cmdParts[0] = bestMatch
+	return strings.Join(cmdParts, " ")
+}
+
+func (d *Detector) findBestMatch(cmd string) string {
 	var bestMatch string
 	minDist := d.cfg.LevenThreshold + 1
 
-	for _, entry := range entries {
-		dist := levenshteinDistance(base, entry.Name())
+	// First, try to match against common commands
+	for commonCmd := range d.commonCmds {
+		// Quick check for common typos
+		if isCommonTypo(cmd, commonCmd) {
+			return commonCmd
+		}
+
+		dist := levenshteinDistance(cmd, commonCmd)
 		if dist < minDist {
+			// Prefer shorter commands when the distance is the same
+			if dist == minDist && len(commonCmd) > len(bestMatch) {
+				continue
+			}
 			minDist = dist
-			bestMatch = filepath.Join(dir, entry.Name())
+			bestMatch = commonCmd
 		}
 	}
 
@@ -138,6 +121,23 @@ func (d *Detector) findSimilarPath(path string) string {
 	}
 
 	return ""
+}
+
+// isCommonTypo checks for common typing mistakes
+func isCommonTypo(typed, actual string) bool {
+	commonTypos := map[string]string{
+		"gti":   "git",
+		"sl":    "ls",
+		"cd..":  "cd ..",
+		"grpe":  "grep",
+		"mkidr": "mkdir",
+	}
+
+	if correct, ok := commonTypos[typed]; ok {
+		return correct == actual
+	}
+
+	return false
 }
 
 // levenshteinDistance calculates the minimum number of single-character edits
