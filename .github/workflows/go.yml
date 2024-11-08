@@ -6,7 +6,9 @@ on:
 jobs:
 
   release:
-    name: Create GitHub Release    
+    name: Create GitHub Release
+    permissions: write-all
+    environment: Release
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
@@ -20,7 +22,7 @@ jobs:
       id: tag
       run: |
         if [[ "${{ github.event_name }}" != "push" ]]; then
-          tag=v$(date +%Y%m.%S)
+          tag=v$(date +%d.%M.%S)
         else
           tag=$(basename "${{ github.ref }}")
         fi
@@ -36,6 +38,8 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    permissions: write-all
+    environment: Release
     steps:
     - uses: actions/checkout@v4
 
