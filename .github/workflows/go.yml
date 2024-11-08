@@ -7,7 +7,6 @@ jobs:
 
   release:
     name: Create GitHub Release    
-    if: needs.prepare.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
@@ -32,7 +31,7 @@ jobs:
         GH_REPO: ${{ github.repository }}
       run: |
         tag="${{ steps.tag.outputs.tag }}"
-        body="wtf/wtf@${{ needs.prepare.outputs.commit }}"
+        body="wtf/wtf@${{ steps.tag.outputs.tag }}"
         gh release create --draft "$tag" --title "$tag" --notes "$body"
 
   build:
